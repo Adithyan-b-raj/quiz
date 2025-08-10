@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Projector - Quiz</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin:18px; }
+    .question { font-size: 32px; font-weight:600; margin-bottom:12px; }
+    .options { font-size: 24px; margin-bottom:20px; }
+    .scoreboard { margin-top:20px; }
+    table { border-collapse: collapse; width: 400px; }
+    td, th { border:1px solid #ccc; padding:8px; text-align:left; }
+  </style>
+</head>
+<body>
+  <div class="question" id="questionText">Waiting for question...</div>
+  <div class="options" id="optionsList"></div>
+  <div class="scoreboard">
+    <h2>Scoreboard</h2>
+    <div id="scoreboardArea">No scores yet.</div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const qText = document.getElementById("questionText");
+    const opts = document.getElementById("optionsList");
+    const sbArea = document.getElementById("scoreboardArea");
+
+    socket.on("newQuestion", (q) => {
+      qText.textContent = q.text;
+      opts.innerHTML = q.options.map(o => `<div>${o}</div>`).join("");
+    });
+
+    socket.on("scoreUpdate", ({ scores, lastAnswerTime }) => {
+      if (!scores || Object.keys(scores).length === 0) {
+        sbArea.innerText = "No scores yet.";
+        return;
+      }
+      const arr = Object.entries(scores).sort((a,b) => b[1] - a[1]);
+      let html = "<table><tr><th>Player</th><th>Score (Time)</th></tr>";
+      arr.forEach(([p, s]) => {
+        const t = lastAnswerTime?.[p] ? `${lastAnswerTime[p]}s` : "-";
+        html += `<tr><td>${p}</td><td>${s} (${t})</td></tr>`;
+      });
+      html += "</table>";
+      sbArea.innerHTML = html;
+    });
+
+    socket.on("questionEnded", (payload) => {
+      // show scoreboard (payload.scores)
+      qText.textContent = "Question ended — scoreboard:";
+      opts.innerHTML = "";
+      socket.emit("requestScores"); // optional: ask server for latest scores
+    });
+
+    // initial load (server will push scoreUpdate)
+  </script>
+</body>
+</html>

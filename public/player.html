@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Quiz Player</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin:18px; text-align:center; }
+    #questionBox { border:1px solid #ddd; padding:16px; border-radius:8px; }
+    button.option { display:block; width:60%; margin:8px auto; padding:10px; font-size:16px; }
+    #timer { font-weight:bold; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <h1>Player</h1>
+  <div>
+    <label>Name: <input id="name" /></label>
+    <button id="joinBtn">Join</button>
+  </div>
+
+  <hr>
+
+  <div id="questionBox">
+    <div id="questionText">Waiting for next question...</div>
+    <div id="options"></div>
+    <div id="timer"></div>
+  </div>
+
+  <div id="status"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const nameInput = document.getElementById("name");
+    const joinBtn = document.getElementById("joinBtn");
+    const questionText = document.getElementById("questionText");
+    const optionsDiv = document.getElementById("options");
+    const timerDiv = document.getElementById("timer");
+    const statusDiv = document.getElementById("status");
+
+    let myName = "";
+    let questionTimerInterval = null;
+
+    joinBtn.onclick = () => {
+      const val = nameInput.value.trim();
+      if (!val) return alert("Enter your name");
+      myName = val;
+      socket.emit("join", myName);
+      statusDiv.textContent = "Joined as: " + myName;
+      nameInput.disabled = true;
+      joinBtn.disabled = true;
+    };
+
+    socket.on("newQuestion", (q) => {
+      // show question
+      questionText.textContent = q.text;
+      optionsDiv.innerHTML = "";
+      q.options.forEach(o => {
+        const b = document.createElement("button");
+        b.className = "option";
+        b.innerText = o;
+        b.onclick = () => {
+          if (!myName) return alert("Please join with your name first.");
+          socket.emit("submitAnswer", o);
+          // lock UI
+          optionsDiv.querySelectorAll("button").forEach(btn => btn.disabled = true);
+          statusDiv.textContent = "Answer submitted: " + o;
+        };
+        optionsDiv.appendChild(b);
+      });
+      startTimer(15); // local countdown (keeps UX responsive)
+      statusDiv.textContent = "";
+    });
+
+    socket.on("yourPoints", (p) => {
+      statusDiv.textContent = p.points > 0 ? `Correct! You got ${p.points} points.` : `Wrong answer.`;
+    });
+
+    socket.on("questionEnded", (payload) => {
+      // show summary briefly
+      statusDiv.textContent = "Question ended. Scoreboard updated.";
+      stopTimer();
+      // disable options
+      optionsDiv.querySelectorAll("button").forEach(btn => btn.disabled = true);
+    });
+
+    function startTimer(sec) {
+      stopTimer();
+      let remaining = sec;
+      timerDiv.textContent = `Time left: ${remaining}s`;
+      questionTimerInterval = setInterval(() => {
+        remaining--;
+        timerDiv.textContent = `Time left: ${remaining}s`;
+        if (remaining <= 0) {
+          stopTimer();
+        }
+      }, 1000);
+    }
+    function stopTimer() {
+      if (questionTimerInterval) {
+        clearInterval(questionTimerInterval);
+        questionTimerInterval = null;
+      }
+      timerDiv.textContent = "";
+    }
+
+    socket.on("errorMessage", (m) => {
+      alert(m);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Quiz Admin</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 18px; }
+    .question-btn { display:block; margin:8px 0; padding:8px 12px; }
+    #scores { white-space: pre-wrap; background:#f4f4f4; padding:8px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <h1>Admin Panel</h1>
+
+  <h3>Questions (preloaded)</h3>
+  <div id="questionsList">Loading...</div>
+
+  <hr>
+  <button id="endBtn">End Current Question</button>
+
+  <h3>Live Scores</h3>
+  <div id="scores">Loading scores...</div>
+
+  <h3>Recent Answers (live)</h3>
+  <ul id="recentAnswers"></ul>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const qListDiv = document.getElementById("questionsList");
+    const scoresDiv = document.getElementById("scores");
+    const recentAnswers = document.getElementById("recentAnswers");
+    const endBtn = document.getElementById("endBtn");
+
+    let questions = [];
+
+    socket.on("questionsList", (q) => {
+      questions = q;
+      renderQuestions();
+    });
+
+    function renderQuestions() {
+      qListDiv.innerHTML = "";
+      questions.forEach((q, idx) => {
+        const btn = document.createElement("button");
+        btn.className = "question-btn";
+        btn.textContent = q.text;
+        btn.onclick = () => {
+          if (!confirm("Send this question to players and projector?")) return;
+          socket.emit("sendQuestion", idx);
+        };
+        qListDiv.appendChild(btn);
+
+        // show options smaller
+        const opt = document.createElement("div");
+        opt.style.marginLeft = "12px";
+        opt.style.fontSize = "90%";
+        opt.textContent = "Options: " + q.options.join(" | ");
+        qListDiv.appendChild(opt);
+      });
+    }
+
+    socket.on("scoreUpdate", (s) => {
+      scoresDiv.textContent = JSON.stringify(s, null, 2);
+    });
+
+    socket.on("answerUpdate", (a) => {
+      const li = document.createElement("li");
+      li.textContent = `${a.player} → ${a.option} (${a.correct ? "correct":"wrong"})`;
+      recentAnswers.insertBefore(li, recentAnswers.firstChild);
+      // keep list short
+      while (recentAnswers.children.length > 10) recentAnswers.removeChild(recentAnswers.lastChild);
+    });
+
+    endBtn.onclick = () => {
+      socket.emit("endQuestion");
+    };
+
+    socket.on("questionEnded", (payload) => {
+      // optionally show summary in admin
+      console.log("questionEnded", payload);
+    });
+  </script>
+</body>
+</html>
